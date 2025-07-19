@@ -130,8 +130,8 @@ def create_top_level_directories(top_level_files):
     
     return created_dirs
 
-def organize_sub_level_files(sub_level_files, top_level_bookmarks):
-    """Move sub-level PDFs to appropriate top-level directories"""
+def create_sub_level_directories(sub_level_files, top_level_bookmarks):
+    """Create directories for sub-level bookmarks within their top-level directories"""
     # Create a mapping of page ranges to top-level bookmarks
     top_level_ranges = []
     
@@ -143,24 +143,105 @@ def organize_sub_level_files(sub_level_files, top_level_bookmarks):
         
         top_level_ranges.append((page, end_page, title))
     
-    # Move each sub-level file to appropriate directory
+    created_sub_dirs = []
+    
+    # Create sub-level directories and organize files
     for filename, title, page in sub_level_files:
         # Find which top-level section this sub-level belongs to
-        target_dir = None
+        target_top_dir = None
         for start_page, end_page, top_title in top_level_ranges:
             if start_page <= page <= end_page:
-                target_dir = f"_{clean_filename(top_title)}"
+                target_top_dir = f"_{clean_filename(top_title)}"
                 break
         
-        if target_dir and os.path.exists(target_dir):
+        if target_top_dir and os.path.exists(target_top_dir):
+            # Create sub-level directory
+            sub_dir_name = f"_{clean_filename(title)}"
+            sub_dir_path = os.path.join(target_top_dir, sub_dir_name)
+            
+            if not os.path.exists(sub_dir_path):
+                os.makedirs(sub_dir_path)
+                created_sub_dirs.append(sub_dir_path)
+                print(f"Created sub-level directory: {sub_dir_path}")
+            
+            # Move sub-level PDF to its directory
             source_path = filename
-            target_path = os.path.join(target_dir, filename)
+            target_path = os.path.join(sub_dir_path, filename)
             
             try:
                 shutil.move(source_path, target_path)
-                print(f"Moved {filename} to {target_dir}/")
+                print(f"Moved {filename} to {sub_dir_path}/")
             except Exception as e:
                 print(f"Error moving {filename}: {e}")
+        else:
+            print(f"Could not determine target directory for {filename}")
+    
+    return created_sub_dirs
+
+def split_sub_level_pages(sub_level_files, top_level_bookmarks):
+    """Split sub-level PDFs into individual pages and create _pages directories"""
+    # Create a mapping of page ranges to top-level bookmarks
+    top_level_ranges = []
+    
+    for i, (level, title, page) in enumerate(top_level_bookmarks):
+        if i + 1 < len(top_level_bookmarks):
+            end_page = top_level_bookmarks[i + 1][2] - 1
+        else:
+            end_page = float('inf')  # Use infinity for the last section
+        
+        top_level_ranges.append((page, end_page, title))
+    
+    # Process each sub-level file
+    for filename, title, page in sub_level_files:
+        # Find which top-level section this sub-level belongs to
+        target_top_dir = None
+        for start_page, end_page, top_title in top_level_ranges:
+            if start_page <= page <= end_page:
+                target_top_dir = f"_{clean_filename(top_title)}"
+                break
+        
+        if target_top_dir and os.path.exists(target_top_dir):
+            sub_dir_name = f"_{clean_filename(title)}"
+            sub_dir_path = os.path.join(target_top_dir, sub_dir_name)
+            
+            if os.path.exists(sub_dir_path):
+                # Create _pages directory
+                pages_dir_path = os.path.join(sub_dir_path, "_pages")
+                if not os.path.exists(pages_dir_path):
+                    os.makedirs(pages_dir_path)
+                    print(f"Created pages directory: {pages_dir_path}")
+                
+                # Path to the sub-level PDF
+                pdf_path = os.path.join(sub_dir_path, filename)
+                
+                if os.path.exists(pdf_path):
+                    try:
+                        # Open the sub-level PDF
+                        sub_doc = fitz.open(pdf_path)
+                        
+                        # Split into individual pages
+                        for page_num in range(sub_doc.page_count):
+                            # Create new document for single page
+                            page_doc = fitz.open()
+                            page_doc.insert_pdf(sub_doc, from_page=page_num, to_page=page_num)
+                            
+                            # Save individual page
+                            page_filename = f"page_{page_num + 1:03d}.pdf"
+                            page_path = os.path.join(pages_dir_path, page_filename)
+                            page_doc.save(page_path)
+                            page_doc.close()
+                            
+                            print(f"Created page: {page_path}")
+                        
+                        sub_doc.close()
+                        print(f"Split {sub_doc.page_count} pages for {filename}")
+                        
+                    except Exception as e:
+                        print(f"Error splitting pages for {filename}: {e}")
+                else:
+                    print(f"Sub-level PDF not found: {pdf_path}")
+            else:
+                print(f"Sub-level directory not found: {sub_dir_path}")
         else:
             print(f"Could not determine target directory for {filename}")
 
@@ -257,13 +338,17 @@ def process_pdf(pdf_path):
         print("\n=== Step 3: Splitting by sub-level bookmarks ===")
         sub_level_files = split_pdf_by_sub_level_bookmarks(doc, sub_level_bookmarks)
         
-        # Step 4: Move sub-level files to appropriate directories
-        print("\n=== Step 4: Organizing sub-level files ===")
-        organize_sub_level_files(sub_level_files, top_level_bookmarks)
+        # Step 4: Create sub-level directories and move files
+        print("\n=== Step 4: Creating sub-level directories ===")
+        created_sub_dirs = create_sub_level_directories(sub_level_files, top_level_bookmarks)
         
         # Step 5: Move top-level files to their directories
         print("\n=== Step 5: Moving top-level files to directories ===")
         move_top_level_files_to_directories(top_level_files)
+        
+        # Step 6: Split sub-level PDFs into individual pages
+        print("\n=== Step 6: Splitting sub-level PDFs into pages ===")
+        split_sub_level_pages(sub_level_files, top_level_bookmarks)
         
         # Close the document
         doc.close()
@@ -271,9 +356,10 @@ def process_pdf(pdf_path):
         print("\n=== Process completed successfully! ===")
         print(f"Created {len(top_level_files)} top-level PDFs")
         print(f"Created {len(sub_level_files)} sub-level PDFs")
-        print(f"Created {len(created_dirs)} directories")
+        print(f"Created {len(created_dirs)} top-level directories")
+        print(f"Created {len(created_sub_dirs)} sub-level directories")
         
-        show_message("Success", f"PDF processing completed!\n\nCreated {len(top_level_files)} top-level PDFs\nCreated {len(sub_level_files)} sub-level PDFs\nCreated {len(created_dirs)} directories\n\nFiles saved in: {pdf_dir}")
+        show_message("Success", f"PDF processing completed!\n\nCreated {len(top_level_files)} top-level PDFs\nCreated {len(sub_level_files)} sub-level PDFs\nCreated {len(created_dirs)} top-level directories\nCreated {len(created_sub_dirs)} sub-level directories\n\nFiles saved in: {pdf_dir}")
         
         return True
         
@@ -319,13 +405,26 @@ FEATURES:
 OUTPUT STRUCTURE:
     _TopLevelBookmark1/
         _TopLevelBookmark1.pdf
-        _1_SubBookmark1.pdf
-        _4_SubBookmark2.pdf
-        ...
+        _SubBookmark1/
+            _1_SubBookmark1.pdf
+            _pages/
+                page_001.pdf
+                page_002.pdf
+                ...
+        _SubBookmark2/
+            _4_SubBookmark2.pdf
+            _pages/
+                page_001.pdf
+                page_002.pdf
+                ...
     _TopLevelBookmark2/
         _TopLevelBookmark2.pdf
-        _43_SubBookmark1.pdf
-        ...
+        _SubBookmark1/
+            _43_SubBookmark1.pdf
+            _pages/
+                page_001.pdf
+                page_002.pdf
+                ...
 
 REQUIREMENTS:
     - Python 3.6+

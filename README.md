@@ -7,7 +7,9 @@ This script splits a PDF file based on its bookmarks, creating separate PDF file
 1. **Top-level bookmark splitting**: Creates separate PDFs for each top-level bookmark with filename prefix "_"
 2. **Directory creation**: Creates folders with the same name as top-level bookmarks with prefix "_"
 3. **Sub-level bookmark splitting**: Creates separate PDFs for each sub-level bookmark with filename prefix "_<page_number>"
-4. **File organization**: Moves sub-level PDFs to their respective top-level directories
+4. **Sub-level directory creation**: Creates directories for each sub-level bookmark within their top-level directories
+5. **File organization**: Moves sub-level PDFs to their respective sub-level directories
+6. **Page splitting**: Splits each sub-level PDF into individual pages and stores them in "_pages" directories
 
 ## Requirements
 
@@ -52,12 +54,27 @@ The script will create the following structure:
 ```
 ├── _TopLevelBookmark1/
 │   ├── _TopLevelBookmark1.pdf
-│   ├── _1_SubBookmark1.pdf
-│   ├── _4_SubBookmark2.pdf
+│   ├── _SubBookmark1/
+│   │   ├── _1_SubBookmark1.pdf
+│   │   └── _pages/
+│   │       ├── page_001.pdf
+│   │       ├── page_002.pdf
+│   │       └── ...
+│   ├── _SubBookmark2/
+│   │   ├── _4_SubBookmark2.pdf
+│   │   └── _pages/
+│   │       ├── page_001.pdf
+│   │       ├── page_002.pdf
+│   │       └── ...
 │   └── ...
 ├── _TopLevelBookmark2/
 │   ├── _TopLevelBookmark2.pdf
-│   ├── _43_SubBookmark1.pdf
+│   ├── _SubBookmark1/
+│   │   ├── _43_SubBookmark1.pdf
+│   │   └── _pages/
+│   │       ├── page_001.pdf
+│   │       ├── page_002.pdf
+│   │       └── ...
 │   └── ...
 └── ...
 ```
